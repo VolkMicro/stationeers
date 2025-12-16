@@ -5,6 +5,9 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV STEAMCMD_DIR=/steamcmd
 ENV INSTALL_DIR=/opt/stationeers
 ARG STATIONEERS_APP_ID=600760
+ARG STEAM_LOGIN=anonymous
+ARG STEAM_PASSWORD=
+ARG STEAM_GUARD_CODE=
 
 # SteamCMD linux32 => нужен полноценный i386 runtime
 RUN dpkg --add-architecture i386 && \
@@ -25,15 +28,33 @@ RUN mkdir -p ${INSTALL_DIR}
 
 # Скачиваем/обновляем dedicated server
 # Дополнительные флаги:
-# - @sSteamCmdForcePlatformType windows — у dedicated есть только Windows-версии
+# - @sSteamCmdForcePlatformType linux — гарантируем linux-билд
 # - @ShutdownOnFailedCommand 1      — немедленно прерывать выполнение при ошибке
-RUN ${STEAMCMD_DIR}/steamcmd.sh \
-    +@sSteamCmdForcePlatformType windows \
-    +@ShutdownOnFailedCommand 1 \
-    +force_install_dir ${INSTALL_DIR} \
-    +login anonymous \
-    +app_update ${STATIONEERS_APP_ID} validate \
-    +quit
+RUN set -eux; \
+    if [ -z "${STEAM_LOGIN}" ]; then \
+      echo "ERROR: STEAM_LOGIN build arg is required" >&2; exit 1; \
+    fi; \
+    if [ "${STEAM_LOGIN}" != "anonymous" ] && [ -z "${STEAM_PASSWORD}" ]; then \
+      echo "ERROR: STEAM_PASSWORD build arg is required when STEAM_LOGIN is not anonymous" >&2; exit 1; \
+    fi; \
+    GUARD_ARGS=""; \
+    if [ -n "${STEAM_GUARD_CODE}" ]; then \
+      GUARD_ARGS="+set_steam_guard_code ${STEAM_GUARD_CODE}"; \
+    fi; \
+    LOGIN_ARGS="+login ${STEAM_LOGIN}"; \
+    if [ "${STEAM_LOGIN}" = "anonymous" ]; then \
+      LOGIN_ARGS="${LOGIN_ARGS}"; \
+    else \
+      LOGIN_ARGS="${LOGIN_ARGS} ${STEAM_PASSWORD}"; \
+    fi; \
+    ${STEAMCMD_DIR}/steamcmd.sh \
+        ${GUARD_ARGS} \
+        +@sSteamCmdForcePlatformType linux \
+        +@ShutdownOnFailedCommand 1 \
+        +force_install_dir ${INSTALL_DIR} \
+        ${LOGIN_ARGS} \
+        +app_update ${STATIONEERS_APP_ID} validate \
+        +quit
 
 
 # ---------- backup runner: без root, без скачиваний на старте ----------
@@ -88,18 +109,15 @@ FROM ubuntu:24.04 AS runtime
 ENV DEBIAN_FRONTEND=noninteractive
 ENV INSTALL_DIR=/opt/stationeers
 ENV DATA_DIR=/data
-ENV WINEPREFIX=${DATA_DIR}/.wine
-ENV WINEDEBUG=-all
 
-# Wine и зависимости для запуска Windows-билда
-RUN dpkg --add-architecture i386 && \
-    apt update && apt install -y \
+# Минимальные зависимости Unity headless + gosu
+RUN apt update && apt install -y \
         ca-certificates \
+        libcurl4 \
+        libkrb5-3 \
+        libgssapi-krb5-2 \
         libssl3 zlib1g \
         libstdc++6 libgcc-s1 \
-        wine64 wine32 \
-        winbind cabextract \
-        xvfb \
         gosu \
     && rm -rf /var/lib/apt/lists/*
 
@@ -110,7 +128,7 @@ RUN useradd --uid 1358 --user-group --create-home \
 # Код сервера (immutable)
 COPY --from=builder ${INSTALL_DIR} ${INSTALL_DIR}
 
-# Скрипт запуска (init Wine + запуск сервера)
+# Скрипт запуска (подготовка /data + запуск под пользователем rocket)
 COPY scripts/server-entrypoint.sh /usr/local/bin/server-entrypoint.sh
 RUN chmod 0755 /usr/local/bin/server-entrypoint.sh
 
@@ -125,7 +143,6 @@ USER root
 # Поэтому запускаем сервер из каталога установки, а сохранения остаются в $HOME (/data).
 WORKDIR ${INSTALL_DIR}
 
-# Важно: Wine-билду требуется вспомогательный entrypoint
 ENTRYPOINT ["/usr/local/bin/server-entrypoint.sh"]
 
 # Базовые флаги; параметры мира добавим через compose (STATIONEERS_ARGS)

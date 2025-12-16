@@ -15,8 +15,7 @@ services:
     volumes:
       - ./data:/data
 
-    # Параметры запуска сервера (Moon сейв)
-    # ПАПКА СЕЙВА ДОЛЖНА БЫТЬ: ./data/saves/Moon
+    # Параметры запуска сервера (используем CLI -file start / -settings)
     command: >
       -nographics -batchmode
       ${STATIONEERS_ARGS}
