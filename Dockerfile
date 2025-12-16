@@ -10,7 +10,8 @@ RUN dpkg --add-architecture i386 && \
     apt update && apt install -y \
       ca-certificates curl \
       libc6:i386 libstdc++6:i386 \
-      libssl3 zlib1g \
+      libssl3 libssl3:i386 \
+      zlib1g zlib1g:i386 \
     && rm -rf /var/lib/apt/lists/*
 
 # SteamCMD (официальный tarball)
