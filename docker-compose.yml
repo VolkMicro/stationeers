@@ -1,0 +1,40 @@
+version: "3.8"
+
+services:
+  stationeers:
+    build:
+      context: .
+      target: runtime
+    container_name: stationeers
+    restart: unless-stopped
+    ports:
+      - "${STATIONEERS_GAME_PORT}:27016/udp"
+      - "${STATIONEERS_QUERY_PORT}:27015/udp"
+    volumes:
+      - ./data:/data
+    command: >
+      -nographics -batchmode
+      ${STATIONEERS_ARGS}
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+
+  backup:
+    build:
+      context: .
+      target: backup
+    container_name: stationeers-backup
+    restart: unless-stopped
+    depends_on:
+      - stationeers
+    environment:
+      TZ: Europe/Berlin
+      DATA_DIR: /data
+      BACKUP_DIR: /backups
+      BACKUP_KEEP_DAYS: "${BACKUP_KEEP_DAYS}"
+      BACKUP_CRON: "${BACKUP_CRON}"
+    volumes:
+      - ./data:/data:ro
+      - ./backups:/backups
+    user: "1358:1358"
