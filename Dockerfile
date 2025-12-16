@@ -22,7 +22,12 @@ RUN mkdir -p ${STEAMCMD_DIR} && \
 RUN mkdir -p ${INSTALL_DIR}
 
 # Скачиваем/обновляем dedicated server
+# Дополнительные флаги:
+# - @sSteamCmdForcePlatformType linux — иногда без него SteamCMD считает, что конфигурация отсутствует
+# - @ShutdownOnFailedCommand 1      — немедленно прерывать выполнение при ошибке
 RUN ${STEAMCMD_DIR}/steamcmd.sh \
+    +@sSteamCmdForcePlatformType linux \
+    +@ShutdownOnFailedCommand 1 \
     +force_install_dir ${INSTALL_DIR} \
     +login anonymous \
     +app_update 600760 validate \

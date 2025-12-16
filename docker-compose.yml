@@ -30,21 +30,21 @@ services:
     tmpfs:
       - /tmp
 
-  backup:
-    build:
-      context: .
-      target: backup
-    container_name: stationeers-backup
-    restart: unless-stopped
-    depends_on:
-      - stationeers
+  # backup:
+  #   build:
+  #     context: .
+  #     target: backup
+  #   container_name: stationeers-backup
+  #   restart: unless-stopped
+  #   depends_on:
+  #     - stationeers
 
-    volumes:
-      - ./data:/data:ro
-      - ./backups:/backups
+  #   volumes:
+  #     - ./data:/data:ro
+  #     - ./backups:/backups
 
-    environment:
-      TZ: Europe/Berlin
-      BACKUP_KEEP_DAYS: "${BACKUP_KEEP_DAYS}"
-      BACKUP_CRON: "${BACKUP_CRON}"
-    user: "1358:1358"
+  #   environment:
+  #     TZ: Europe/Berlin
+  #     BACKUP_KEEP_DAYS: "${BACKUP_KEEP_DAYS}"
+  #     BACKUP_CRON: "${BACKUP_CRON}"
+  #   user: "1358:1358"
