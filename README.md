@@ -1,59 +1,61 @@
 # Stationeers Dedicated Server (Docker, Ubuntu 24.04)
 
-Продакшн-ориентированный стек:
-- immutable-образ с бинарём сервера (скачивается только на этапе build через SteamCMD)
-- runtime без root (UID/GID 1358), данные только в bind-mount `./data`
-- отдельный контейнер для бэкапов (tar + ротация)
-- настройки через `.env`
+Продакшн-ориентированное развертывание: immutable-образ, non-root runtime, данные только в bind-mount, отдельный контейнер бэкапов.
 
 ## Архитектура
-- `Dockerfile` — multi-stage:
-  - `builder` (cm2network/steamcmd:steam) скачивает `600760` в `/home/steam/stationeers` под пользователем steam; поддерживает ветки `public/beta` и Steam Guard.
-  - `runtime` (ubuntu:24.04) содержит только зависимости Unity headless + `gosu`, копирует билд в `/opt/stationeers`, стартует под пользователем `rocket` (UID 1358).
-  - `backup` (ubuntu:24.04 + supercronic) создаёт tar.gz из `/data` в `/backups`, чистит старые.
-- `docker-compose.yml` — сервисы `stationeers` и `backup`, оба монтируют `./data`, бэкапы пишутся в `./backups`.
-- Сейвы/логи/настройки — **только** в `./data` (volume). Существующий сейв «Луна» подхватывается, если `STATIONEERS_ARGS` указывает на то же имя.
+- **Dockerfile (multi-stage)**
+  - **builder**: `cm2network/steamcmd:steam`, скачивает приложение `600760` в `/home/steam/stationeers` под пользователем steam. Поддерживает ветки `public`/`beta`, Steam Guard, приватные бета-пароли.
+  - **runtime**: `ubuntu:24.04`, только Unity-зависимости + `gosu`, пользователь `rocket` (UID/GID 1358). Копирует билд в `/opt/stationeers`, жёстко линкует `/opt/stationeers/saves -> /data/saves`.
+  - **backup**: `ubuntu:24.04` + `supercronic`, пользователь `backup` (UID/GID 1358). Делает tar.gz из `/data` в `/backups`, чистит старше `BACKUP_KEEP_DAYS`.
+- **docker-compose.yml**: сервисы `stationeers` и `backup`, общие тома `./data` и `./backups`, порты берутся из `.env`.
+- **Данные**: сейвы, логи, конфиги — строго в `./data` (bind-mount). Сейв «Lunar» или другой подхватывается, если имя станции в `STATIONEERS_ARGS` совпадает с папкой `./data/saves/<StationName>`.
 
-## Запуск с нуля
+## Быстрый старт
 ```bash
 cp .env.example .env
-# при необходимости поправьте STATIONEERS_ARGS под ваш сейв/мир
+# при необходимости подправьте STATIONEERS_ARGS (stationname/worldid, порт, путь лога /data/server.log)
 
-# сборка (анонимный доступ работает; при необходимости можно передать логин/пароль/guard-код)
+mkdir -p data backups
+sudo chown -R 1358:1358 data backups   # или chown без sudo
+
 docker compose build --no-cache --build-arg STEAM_LOGIN=anonymous
-
 docker compose up -d
 docker logs -f stationeers
 ```
-Порты: `27016/udp` (game), `27015/udp` (query) пробросаны из `.env`.
+Порты по умолчанию: `27016/udp` (game) и `27015/udp` (query), задаются в `.env`.
+
+## Импорт существующего сейва
+1. `docker compose down`
+2. Скопируйте сейв в `./data/saves/<StationName>` (например, `./data/saves/Lunar`).
+3. В `.env` в `STATIONEERS_ARGS` первый параметр после `-file start` должен совпадать с `<StationName>`.
+4. `sudo chown -R 1358:1358 data/saves`
+5. `docker compose up -d` и проверьте `tail -n 50 data/server.log` — не должно быть "Created new save".
 
 ## Обновление сервера
 ```bash
-./scripts/update.sh
+./scripts/update.sh    # docker compose build --pull && up -d
 ```
-Скрипт пересобирает образ (скачивает новый билд через SteamCMD в builder-стейдже) и перезапускает compose. Данные в `./data` не трогаются.
+SteamCMD работает только в builder-стейдже; `./data` не трогается.
 
 ## Бэкапы
-- Фоновый контейнер `backup` по `BACKUP_CRON` кладёт архивы в `./backups/stationeers_<timestamp>.tar.gz` и удаляет старше `BACKUP_KEEP_DAYS`.
-- Разовый бэкап:
-  ```bash
-  ./scripts/backup.sh
-  ```
-- Восстановление: остановите сервер, распакуйте нужный архив в `./data`, запустите снова.
+- Фоновый контейнер `backup` по `BACKUP_CRON` кладёт архивы в `./backups/stationeers_<timestamp>.tar.gz`, удаляет старше `BACKUP_KEEP_DAYS`.
+- Разовый бэкап: `./scripts/backup.sh`
+- Восстановление: `docker compose down`, распаковать архив в `./data`, `docker compose up -d`.
 
-## Перенос сейвов
-1. Остановите контейнер: `docker compose down`.
-2. Скопируйте вашу папку `saves/<имя_мира>` в `./data/saves/...`.
-3. Убедитесь, что `STATIONEERS_ARGS` указывает на тот же `stationname/worldid`.
-4. Запустите `docker compose up -d`.
+## Важные переменные `.env`
+- `STATIONEERS_GAME_PORT`, `STATIONEERS_QUERY_PORT` — внешние UDP-порты.
+- `STATIONEERS_ARGS` — CLI сервера (рекомендуется `-logFile "/data/server.log"` и `LocalIpAddress 0.0.0.0`; stationname совпадает с папкой сейва).
+- `STATIONEERS_BRANCH`, `STATIONEERS_BETAPASS` — ветка/пароль beta (по умолчанию public).
+- `BACKUP_CRON`, `BACKUP_KEEP_DAYS` — расписание и ротация бэкапов.
 
 ## Почему так
-- SteamCMD только в builder: нет сетевых скачиваний в runtime, минимальный образ.
-- Non-root runtime + фиксированный UID/GID 1358: корректные права на тома и безопасность.
-- Данные строго в volume `./data`: обновления образа не трогают сейвы.
-- Бэкапы в отдельном контейнере: можно включить/отключить независимо, ротация по дням.
-- Фиксированные базовые образы (`cm2network/steamcmd:steam`, `ubuntu:24.04`): воспроизводимость.
+- SteamCMD только на этапе сборки: минимальный runtime, без сетевых скачиваний.
+- Non-root runtime с фиксированным UID/GID 1358: корректные права на тома и безопасность.
+- Жёсткий symlink `/opt/stationeers/saves -> /data/saves`: сейвы всегда в bind-mount, обновление образа не трогает данные.
+- Отдельный контейнер бэкапов: независимое расписание и ротация.
+- Фиксированные базовые образы (`cm2network/steamcmd:steam`, `ubuntu:24.04`): воспроизводимая сборка.
 
-## Известные грабли / решения
-- Если SteamCMD снова начнёт отказывать анониму: соберите образ с `--build-arg STEAM_LOGIN/STEAM_PASSWORD/STEAM_GUARD_CODE`, либо скачайте билд вне Docker и положите в `./data` (но предпочтительнее логин).
-- UID/GID на хосте должны позволять запись в `./data`/`./backups`. При необходимости выполните `chown -R 1358:1358 data backups`.
+## Известные грабли
+- Если SteamCMD откажет анониму — соберите с `--build-arg STEAM_LOGIN/STEAM_PASSWORD/STEAM_GUARD_CODE`.
+- Если сервер создаёт новый мир — проверьте совпадение stationname с папкой в `./data/saves` и права (`chown -R 1358:1358 data`).
+- Предупреждение о `version` в compose можно игнорировать или удалить строку `version: "3.8"` в `docker-compose.yml`.
