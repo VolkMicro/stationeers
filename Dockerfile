@@ -1,29 +1,18 @@
-# ---------- builder: скачиваем Stationeers через SteamCMD ----------
-FROM ubuntu:24.04 AS builder
+# ---------- builder: скачиваем Stationeers через готовый образ SteamCMD ----------
+FROM cm2network/steamcmd:steam AS builder
 
-ENV DEBIAN_FRONTEND=noninteractive
-ENV STEAMCMD_DIR=/usr/games
-ENV INSTALL_DIR=/opt/stationeers
+USER steam
+ENV STEAMCMD_DIR=/home/steam/steamcmd
+ENV INSTALL_DIR=/home/steam/stationeers
 ARG STATIONEERS_APP_ID=600760
 ARG STEAM_LOGIN=anonymous
 ARG STEAM_PASSWORD=
 ARG STEAM_GUARD_CODE=
 
-# SteamCMD linux32 => нужен полноценный i386 runtime
-RUN dpkg --add-architecture i386 && \
-    apt update && apt install -y \
-      ca-certificates curl \
-      libc6:i386 libstdc++6:i386 \
-      libssl3 libssl3:i386 \
-      lib32gcc-s1 \
-      zlib1g zlib1g:i386 \
-      steamcmd \
-    && rm -rf /var/lib/apt/lists/*
-
 RUN mkdir -p ${INSTALL_DIR}
 
 # Скачиваем/обновляем dedicated server (точно по официальной инструкции)
-# - @ShutdownOnFailedCommand 1      — немедленно прерывать выполнение при ошибке
+# - @ShutdownOnFailedCommand 1 — немедленно прерывать выполнение при ошибке
 RUN set -eux; \
     if [ -z "${STEAM_LOGIN}" ]; then \
       echo "ERROR: STEAM_LOGIN build arg is required" >&2; exit 1; \
@@ -36,12 +25,10 @@ RUN set -eux; \
       GUARD_ARGS="+set_steam_guard_code ${STEAM_GUARD_CODE}"; \
     fi; \
     LOGIN_ARGS="+login ${STEAM_LOGIN}"; \
-    if [ "${STEAM_LOGIN}" = "anonymous" ]; then \
-      LOGIN_ARGS="${LOGIN_ARGS}"; \
-    else \
+    if [ "${STEAM_LOGIN}" != "anonymous" ]; then \
       LOGIN_ARGS="${LOGIN_ARGS} ${STEAM_PASSWORD}"; \
     fi; \
-    ${STEAMCMD_DIR}/steamcmd \
+    ${STEAMCMD_DIR}/steamcmd.sh \
         ${GUARD_ARGS} \
         +@ShutdownOnFailedCommand 1 \
         +force_install_dir ${INSTALL_DIR} \
@@ -119,7 +106,7 @@ RUN useradd --uid 1358 --user-group --create-home \
     --home ${DATA_DIR} --shell /usr/sbin/nologin rocket
 
 # Код сервера (immutable)
-COPY --from=builder ${INSTALL_DIR} ${INSTALL_DIR}
+COPY --from=builder /home/steam/stationeers ${INSTALL_DIR}
 
 # Скрипт запуска (подготовка /data + запуск под пользователем rocket)
 COPY scripts/server-entrypoint.sh /usr/local/bin/server-entrypoint.sh

@@ -35,7 +35,7 @@ docker logs -f stationeers
 
 ## Что внутри
 
-- Stage `builder` устанавливает SteamCMD (i386 runtime) и, будучи авторизованным в Steam, качает приложение `600760` (`rocketstation_DedicatedServer.x86_64`).
+- Stage `builder` основан на `cm2network/steamcmd` (как советуют в официальной wiki) и через предустановленный SteamCMD качает приложение `600760` (`rocketstation_DedicatedServer.x86_64`) прямо в `/home/steam/stationeers`.
 - Stage `runtime` содержит только нужные системные библиотеки + `gosu`; запуском руководит `scripts/server-entrypoint.sh`, который:
   - гарантирует существование `/data` и владельца `rocket:rocket`;
   - стартует бинарник от пользователя `rocket`, подставляя аргументы из `docker-compose.yml`.
