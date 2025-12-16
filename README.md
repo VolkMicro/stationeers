@@ -21,3 +21,7 @@ docker logs -f stationeers
 - не запускается от root (UID/GID 1358)
 - не тянет apt при старте: используем встроенный планировщик supercronic
 - cron-правила задаются переменной `BACKUP_CRON` (пример в `.env.example`)
+
+Важно: переменные `BACKUP_CRON` и `BACKUP_KEEP_DAYS` обязательны. Если их не задать в `.env`, контейнеры будут падать с ошибкой `BACKUP_CRON is required`.
+
+Dockerfile по умолчанию собирает серверный образ (stage `runtime`), а для бэкапов используется отдельный target `backup`, указанный в `docker-compose.yml`.

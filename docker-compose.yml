@@ -1,6 +1,8 @@
 services:
   stationeers:
-    build: .
+    build:
+      context: .
+      target: runtime
     container_name: stationeers
     restart: unless-stopped
 
