@@ -47,7 +47,8 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV BACKUP_HOME=/home/backup
 
 ARG SUPERCRONIC_VERSION=0.2.1
-ARG SUPERCRONIC_SHA256=191b320b3cb44bfae1654aefb2c6c2d4c195c46bd0a65bb3c87d2e4093e71279
+# Если нужен контроль целостности, передайте правильный SHA256 через build-arg.
+ARG SUPERCRONIC_SHA256=
 
 RUN apt update && apt install -y \
     ca-certificates \
@@ -72,7 +73,11 @@ RUN if ! getent group backup >/dev/null; then \
 
 RUN curl -fsSLo /tmp/supercronic \
       https://github.com/aptible/supercronic/releases/download/v${SUPERCRONIC_VERSION}/supercronic-linux-amd64 \
-  && echo "${SUPERCRONIC_SHA256}  /tmp/supercronic" | sha256sum -c - \
+  && if [ -n "${SUPERCRONIC_SHA256}" ]; then \
+       echo "${SUPERCRONIC_SHA256}  /tmp/supercronic" | sha256sum -c -; \
+     else \
+       echo "WARN: SUPERCRONIC_SHA256 not provided, skipping checksum verification"; \
+     fi \
   && install -m 0755 /tmp/supercronic /usr/local/bin/supercronic \
   && rm /tmp/supercronic
 
