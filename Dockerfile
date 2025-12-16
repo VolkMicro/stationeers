@@ -81,7 +81,17 @@ RUN apt update && apt install -y \
     tar \
   && rm -rf /var/lib/apt/lists/*
 
-RUN useradd --uid 1358 --user-group --create-home --home ${BACKUP_HOME} --shell /usr/sbin/nologin backup
+RUN if ! getent group backup >/dev/null; then \
+      groupadd --gid 1358 backup; \
+    else \
+      groupmod --gid 1358 backup; \
+    fi \
+ && if ! id -u backup >/dev/null 2>&1; then \
+      useradd --uid 1358 --gid backup --create-home --home ${BACKUP_HOME} --shell /usr/sbin/nologin backup; \
+    else \
+      usermod --uid 1358 --gid backup --home ${BACKUP_HOME} --shell /usr/sbin/nologin backup; \
+      mkdir -p ${BACKUP_HOME}; \
+    fi
 
 # supercronic: cron совместимый планировщик без демона cron
 RUN curl -fsSLo /tmp/supercronic \
