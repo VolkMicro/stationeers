@@ -105,7 +105,12 @@ COPY --from=builder ${INSTALL_DIR} ${INSTALL_DIR}
 RUN mkdir -p ${DATA_DIR} && chown -R 1358:1358 ${DATA_DIR}
 
 USER rocket
-WORKDIR ${DATA_DIR}
+
+# Важный момент: исполняемый файл ожидает соседнюю папку `rocketstation_Data`.
+# Если рабочая директория указывает на /data, Unity не найдёт ресурсы (StreamingAssets),
+# что приводит к ошибкам шейдеров и NullReference в WorldManager при загрузке.
+# Поэтому запускаем сервер из каталога установки, а сохранения остаются в $HOME (/data).
+WORKDIR ${INSTALL_DIR}
 
 # Важно: абсолютный путь к бинарнику (исправляет твой "косяк")
 ENTRYPOINT ["/opt/stationeers/rocketstation_DedicatedServer.x86_64"]
