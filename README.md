@@ -16,3 +16,8 @@ cp .env.example .env
 docker compose build --no-cache
 docker compose up -d
 docker logs -f stationeers
+
+Сервис бэкапов собирается из этого же Dockerfile (stage `backup`):
+- не запускается от root (UID/GID 1358)
+- не тянет apt при старте: используем встроенный планировщик supercronic
+- cron-правила задаются переменной `BACKUP_CRON` (пример в `.env.example`)

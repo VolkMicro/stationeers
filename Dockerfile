@@ -60,3 +60,39 @@ ENTRYPOINT ["/opt/stationeers/rocketstation_DedicatedServer.x86_64"]
 
 # Базовые флаги; параметры мира добавим через compose (STATIONEERS_ARGS)
 CMD ["-nographics", "-batchmode"]
+
+
+# ---------- backup runner: без root, без скачиваний на старте ----------
+FROM ubuntu:24.04 AS backup
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV BACKUP_HOME=/home/backup
+
+ARG SUPERCRONIC_VERSION=0.2.1
+ARG SUPERCRONIC_SHA256=191b320b3cb44bfae1654aefb2c6c2d4c195c46bd0a65bb3c87d2e4093e71279
+
+RUN apt update && apt install -y \
+    ca-certificates \
+    coreutils \
+    curl \
+    findutils \
+    gzip \
+    tar \
+  && rm -rf /var/lib/apt/lists/*
+
+RUN useradd --uid 1358 --user-group --create-home --home ${BACKUP_HOME} --shell /usr/sbin/nologin backup
+
+# supercronic: cron совместимый планировщик без демона cron
+RUN curl -fsSLo /tmp/supercronic \
+      https://github.com/aptible/supercronic/releases/download/v${SUPERCRONIC_VERSION}/supercronic-linux-amd64 \
+  && echo "${SUPERCRONIC_SHA256}  /tmp/supercronic" | sha256sum -c - \
+  && install -m 0755 /tmp/supercronic /usr/local/bin/supercronic \
+  && rm /tmp/supercronic
+
+COPY scripts/backup-entrypoint.sh /usr/local/bin/backup-entrypoint.sh
+RUN chmod 0755 /usr/local/bin/backup-entrypoint.sh
+
+USER backup
+WORKDIR ${BACKUP_HOME}
+
+ENTRYPOINT ["/usr/local/bin/backup-entrypoint.sh"]
