@@ -1,0 +1,64 @@
+services:
+  stationeers:
+    build: .
+    container_name: stationeers
+    restart: unless-stopped
+
+    # Порты (пример)
+    ports:
+      - "${STATIONEERS_GAME_PORT}:27016/udp"
+      - "${STATIONEERS_QUERY_PORT}:27015/udp"
+
+    # Сейвы/логи строго в /data (bind mount)
+    volumes:
+      - ./data:/data
+
+    # Важно: совпадение UID/GID с хостом
+    user: "1358:1358"
+
+    # Параметры запуска сервера (Moon сейв)
+    # ПАПКА СЕЙВА ДОЛЖНА БЫТЬ: ./data/saves/Moon
+    command: >
+      -nographics -batchmode
+      ${STATIONEERS_ARGS}
+
+    # Безопасность
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+
+  backup:
+    image: ubuntu:24.04
+    container_name: stationeers-backup
+    restart: unless-stopped
+    depends_on:
+      - stationeers
+
+    volumes:
+      - ./data:/data:ro
+      - ./backups:/backups
+
+    environment:
+      TZ: Europe/Berlin
+      BACKUP_KEEP_DAYS: "${BACKUP_KEEP_DAYS}"
+      BACKUP_CRON: "${BACKUP_CRON}"
+
+    entrypoint: >
+      bash -lc '
+        set -e;
+        apt update >/dev/null && apt install -y cron tar gzip coreutils findutils >/dev/null;
+        mkdir -p /backups /var/log;
+        cat >/backup.sh << "EOF"
+        #!/bin/bash
+        set -euo pipefail
+        TS=$(date +%F_%H-%M-%S)
+        mkdir -p /backups
+        tar -czf "/backups/stationeers_${TS}.tar.gz" -C /data .
+        find /backups -type f -name "stationeers_*.tar.gz" -mtime +${BACKUP_KEEP_DAYS} -delete
+        EOF
+        chmod +x /backup.sh;
+        echo "$BACKUP_CRON root /bin/bash /backup.sh >>/var/log/backup.log 2>&1" > /etc/cron.d/stationeers-backup;
+        chmod 0644 /etc/cron.d/stationeers-backup;
+        cron -f
+      '
