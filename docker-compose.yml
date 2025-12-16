@@ -15,9 +15,6 @@ services:
     volumes:
       - ./data:/data
 
-    # Важно: совпадение UID/GID с хостом
-    user: "1358:1358"
-
     # Параметры запуска сервера (Moon сейв)
     # ПАПКА СЕЙВА ДОЛЖНА БЫТЬ: ./data/saves/Moon
     command: >

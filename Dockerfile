@@ -4,13 +4,15 @@ FROM ubuntu:24.04 AS builder
 ENV DEBIAN_FRONTEND=noninteractive
 ENV STEAMCMD_DIR=/steamcmd
 ENV INSTALL_DIR=/opt/stationeers
+ARG STATIONEERS_APP_ID=600760
 
-# SteamCMD linux32 => нужен i386 runtime
+# SteamCMD linux32 => нужен полноценный i386 runtime
 RUN dpkg --add-architecture i386 && \
     apt update && apt install -y \
       ca-certificates curl \
       libc6:i386 libstdc++6:i386 \
       libssl3 libssl3:i386 \
+      lib32gcc-s1 \
       zlib1g zlib1g:i386 \
     && rm -rf /var/lib/apt/lists/*
 
@@ -23,14 +25,14 @@ RUN mkdir -p ${INSTALL_DIR}
 
 # Скачиваем/обновляем dedicated server
 # Дополнительные флаги:
-# - @sSteamCmdForcePlatformType linux — иногда без него SteamCMD считает, что конфигурация отсутствует
+# - @sSteamCmdForcePlatformType windows — у dedicated есть только Windows-версии
 # - @ShutdownOnFailedCommand 1      — немедленно прерывать выполнение при ошибке
 RUN ${STEAMCMD_DIR}/steamcmd.sh \
-    +@sSteamCmdForcePlatformType linux \
+    +@sSteamCmdForcePlatformType windows \
     +@ShutdownOnFailedCommand 1 \
     +force_install_dir ${INSTALL_DIR} \
     +login anonymous \
-    +app_update 600760 validate \
+    +app_update ${STATIONEERS_APP_ID} validate \
     +quit
 
 
@@ -86,25 +88,36 @@ FROM ubuntu:24.04 AS runtime
 ENV DEBIAN_FRONTEND=noninteractive
 ENV INSTALL_DIR=/opt/stationeers
 ENV DATA_DIR=/data
+ENV WINEPREFIX=${DATA_DIR}/.wine
+ENV WINEDEBUG=-all
 
-# Минимальные зависимости рантайма
-RUN apt update && apt install -y \
-    ca-certificates \
-    libssl3 zlib1g \
-    libstdc++6 libgcc-s1 \
- && rm -rf /var/lib/apt/lists/*
+# Wine и зависимости для запуска Windows-билда
+RUN dpkg --add-architecture i386 && \
+    apt update && apt install -y \
+        ca-certificates \
+        libssl3 zlib1g \
+        libstdc++6 libgcc-s1 \
+        wine64 wine32 \
+        winbind cabextract \
+        xvfb \
+        gosu \
+    && rm -rf /var/lib/apt/lists/*
 
 # Непривилегированный пользователь (UID фиксируем для прав на volume)
 RUN useradd --uid 1358 --user-group --create-home \
-    --home ${DATA_DIR} --shell /sbin/nologin rocket
+    --home ${DATA_DIR} --shell /usr/sbin/nologin rocket
 
 # Код сервера (immutable)
 COPY --from=builder ${INSTALL_DIR} ${INSTALL_DIR}
 
+# Скрипт запуска (init Wine + запуск сервера)
+COPY scripts/server-entrypoint.sh /usr/local/bin/server-entrypoint.sh
+RUN chmod 0755 /usr/local/bin/server-entrypoint.sh
+
 # Данные (mutable) живут в /data и монтируются с хоста
 RUN mkdir -p ${DATA_DIR} && chown -R 1358:1358 ${DATA_DIR}
 
-USER rocket
+USER root
 
 # Важный момент: исполняемый файл ожидает соседнюю папку `rocketstation_Data`.
 # Если рабочая директория указывает на /data, Unity не найдёт ресурсы (StreamingAssets),
@@ -112,8 +125,8 @@ USER rocket
 # Поэтому запускаем сервер из каталога установки, а сохранения остаются в $HOME (/data).
 WORKDIR ${INSTALL_DIR}
 
-# Важно: абсолютный путь к бинарнику (исправляет твой "косяк")
-ENTRYPOINT ["/opt/stationeers/rocketstation_DedicatedServer.x86_64"]
+# Важно: Wine-билду требуется вспомогательный entrypoint
+ENTRYPOINT ["/usr/local/bin/server-entrypoint.sh"]
 
 # Базовые флаги; параметры мира добавим через compose (STATIONEERS_ARGS)
 CMD ["-nographics", "-batchmode"]
