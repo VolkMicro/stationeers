@@ -2,7 +2,7 @@
 FROM ubuntu:24.04 AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
-ENV STEAMCMD_DIR=/steamcmd
+ENV STEAMCMD_DIR=/usr/games
 ENV INSTALL_DIR=/opt/stationeers
 ARG STATIONEERS_APP_ID=600760
 ARG STEAM_LOGIN=anonymous
@@ -17,18 +17,12 @@ RUN dpkg --add-architecture i386 && \
       libssl3 libssl3:i386 \
       lib32gcc-s1 \
       zlib1g zlib1g:i386 \
+      steamcmd \
     && rm -rf /var/lib/apt/lists/*
-
-# SteamCMD (официальный tarball)
-RUN mkdir -p ${STEAMCMD_DIR} && \
-    cd ${STEAMCMD_DIR} && \
-    curl -fsSL https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz | tar -xz
 
 RUN mkdir -p ${INSTALL_DIR}
 
-# Скачиваем/обновляем dedicated server
-# Дополнительные флаги:
-# - @sSteamCmdForcePlatformType linux — гарантируем linux-билд
+# Скачиваем/обновляем dedicated server (точно по официальной инструкции)
 # - @ShutdownOnFailedCommand 1      — немедленно прерывать выполнение при ошибке
 RUN set -eux; \
     if [ -z "${STEAM_LOGIN}" ]; then \
@@ -47,9 +41,8 @@ RUN set -eux; \
     else \
       LOGIN_ARGS="${LOGIN_ARGS} ${STEAM_PASSWORD}"; \
     fi; \
-    ${STEAMCMD_DIR}/steamcmd.sh \
+    ${STEAMCMD_DIR}/steamcmd \
         ${GUARD_ARGS} \
-        +@sSteamCmdForcePlatformType linux \
         +@ShutdownOnFailedCommand 1 \
         +force_install_dir ${INSTALL_DIR} \
         ${LOGIN_ARGS} \
