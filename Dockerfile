@@ -114,6 +114,8 @@ RUN useradd --uid 1358 --user-group --create-home \
 
 # Код сервера (immutable)
 COPY --from=builder /home/steam/stationeers ${INSTALL_DIR}
+# Разрешаем rocket писать куда нужно (Unity создаёт settings/saves рядом с бинарём)
+RUN chown -R 1358:1358 ${INSTALL_DIR}
 
 # Скрипт запуска (подготовка /data + запуск под пользователем rocket)
 COPY scripts/server-entrypoint.sh /usr/local/bin/server-entrypoint.sh
