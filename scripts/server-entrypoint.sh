@@ -16,14 +16,12 @@ prepare_data_dir() {
 link_saves_dir() {
   mkdir -p "${SAVES_DIR}"
   chown -R "${SERVER_USER}:${SERVER_USER}" "${SAVES_DIR}"
-  if [ ! -L "${INSTALL_SAVES}" ]; then
-    # если уже есть папка, перенесём её содержимое и сделаем ссылку
-    if [ -d "${INSTALL_SAVES}" ] && [ ! -L "${INSTALL_SAVES}" ]; then
-      mv "${INSTALL_SAVES}"/* "${SAVES_DIR}" 2>/dev/null || true
-      rmdir "${INSTALL_SAVES}" 2>/dev/null || true
-    fi
-    ln -s "${SAVES_DIR}" "${INSTALL_SAVES}"
+  # Принудительно делаем saves ссылкой на том
+  if [ -d "${INSTALL_SAVES}" ] && [ ! -L "${INSTALL_SAVES}" ]; then
+    mv "${INSTALL_SAVES}"/* "${SAVES_DIR}" 2>/dev/null || true
+    rm -rf "${INSTALL_SAVES}"
   fi
+  ln -sfn "${SAVES_DIR}" "${INSTALL_SAVES}"
 }
 
 run_server() {
