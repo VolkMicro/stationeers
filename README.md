@@ -8,6 +8,7 @@ Container setup for a Stationeers dedicated server. The build is split into a St
 - `scripts/server-entrypoint.sh`: prepares `/data`, links `/opt/stationeers/saves` to `/data/saves`, then execs the server.
 - `.env.example`: defaults to generating a fresh Mars world named `MarsBase` and logging to `/data/server.log`.
 - No backup sidecar; rely on the game's autosaves or your own external snapshots.
+- Optional Steam login build args are wired through compose (`STEAM_LOGIN/STEAM_PASSWORD/STEAM_GUARD_CODE`) in case anonymous download fails with `Missing configuration`.
 
 ## Quick start (fresh Mars world)
 ```bash
@@ -24,6 +25,7 @@ The default `STATIONEERS_ARGS` run `-file start MarsBase Mars ...`, so the serve
 ## Changing the world
 - To regenerate from scratch, stop the container and delete `./data/saves/MarsBase` (or set `STATIONEERS_ARGS` to a new world name/map), then start again.
 - Adjust ports or other settings in `.env`.
+- If SteamCMD errors with `Missing configuration`, set `STEAM_LOGIN`, `STEAM_PASSWORD`, and (if needed) `STEAM_GUARD_CODE` in `.env` and rebuild so the builder logs in with your account.
 
 ## Updating the install
 ```bash
