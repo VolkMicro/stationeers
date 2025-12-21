@@ -10,13 +10,21 @@ ENV INSTALL_DIR=/home/steam/stationeers
 ARG STATIONEERS_APP_ID=600760
 ARG STATIONEERS_BRANCH=public        # public | beta | etc.
 ARG STATIONEERS_BETAPASS=
-ARG STEAM_LOGIN=anonymous
-ARG STEAM_PASSWORD=
-ARG STEAM_GUARD_CODE=
+ARG STEAM_LOGIN                      # required: Steam account (or set to anonymous explicitly)
+ARG STEAM_PASSWORD                   # required if STEAM_LOGIN is not anonymous
+ARG STEAM_GUARD_CODE=                # optional
 
 RUN mkdir -p "${INSTALL_DIR}"
 
 RUN set -eux; \
+    if [ -z "${STEAM_LOGIN}" ]; then \
+      echo "ERROR: STEAM_LOGIN is required (set to your Steam account or 'anonymous')."; \
+      exit 1; \
+    fi; \
+    if [ "${STEAM_LOGIN}" != "anonymous" ] && [ -z "${STEAM_PASSWORD}" ]; then \
+      echo "ERROR: STEAM_PASSWORD is required when STEAM_LOGIN is not anonymous."; \
+      exit 1; \
+    fi; \
     BRANCH_ARGS=""; \
     if [ "${STATIONEERS_BRANCH}" != "public" ]; then \
       BRANCH_ARGS="-beta ${STATIONEERS_BRANCH}"; \
@@ -27,6 +35,9 @@ RUN set -eux; \
     LOGIN_ARGS="+login ${STEAM_LOGIN}"; \
     if [ "${STEAM_LOGIN}" != "anonymous" ]; then \
       LOGIN_ARGS="${LOGIN_ARGS} ${STEAM_PASSWORD}"; \
+      if [ -n "${STEAM_GUARD_CODE}" ]; then \
+        LOGIN_ARGS="${LOGIN_ARGS} ${STEAM_GUARD_CODE}"; \
+      fi; \
     fi; \
     GUARD_ARGS=""; \
     if [ -n "${STEAM_GUARD_CODE}" ]; then \
