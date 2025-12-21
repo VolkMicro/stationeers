@@ -10,27 +10,23 @@ ENV INSTALL_DIR=/home/steam/stationeers
 ARG STATIONEERS_APP_ID=600760
 ARG STATIONEERS_BRANCH=public        # public | beta | etc.
 ARG STATIONEERS_BETAPASS=
-ARG STEAM_LOGIN                      # required: Steam account (or set to anonymous explicitly)
-ARG STEAM_PASSWORD                   # required if STEAM_LOGIN is not anonymous
+ARG STEAM_LOGIN=anonymous            # steamcmd login, anonymous by default
+ARG STEAM_PASSWORD=                  # required if STEAM_LOGIN is not anonymous
 ARG STEAM_GUARD_CODE=                # optional
+ARG STEAMCMD_FORCE_PLATFORM=         # optional, e.g. windows (only if SteamCMD needs it)
 
 RUN mkdir -p "${INSTALL_DIR}"
 
 RUN set -eux; \
-    if [ -z "${STEAM_LOGIN}" ]; then \
-      echo "ERROR: STEAM_LOGIN is required (set to your Steam account or 'anonymous')."; \
-      exit 1; \
-    fi; \
-    if [ "${STEAM_LOGIN}" != "anonymous" ] && [ -z "${STEAM_PASSWORD}" ]; then \
-      echo "ERROR: STEAM_PASSWORD is required when STEAM_LOGIN is not anonymous."; \
-      exit 1; \
+    FORCE_PLATFORM_ARGS=""; \
+    if [ -n "${STEAMCMD_FORCE_PLATFORM}" ]; then \
+      FORCE_PLATFORM_ARGS="+@sSteamCmdForcePlatformType ${STEAMCMD_FORCE_PLATFORM}"; \
     fi; \
     BRANCH_ARGS=""; \
-    if [ "${STATIONEERS_BRANCH}" != "public" ]; then \
-      BRANCH_ARGS="-beta ${STATIONEERS_BRANCH}"; \
-      if [ -n "${STATIONEERS_BETAPASS}" ]; then \
-        BRANCH_ARGS="${BRANCH_ARGS} -betapassword ${STATIONEERS_BETAPASS}"; \
-      fi; \
+    # always pin a branch explicitly; default is public
+    BRANCH_ARGS="-beta ${STATIONEERS_BRANCH}"; \
+    if [ -n "${STATIONEERS_BETAPASS}" ]; then \
+      BRANCH_ARGS="${BRANCH_ARGS} -betapassword ${STATIONEERS_BETAPASS}"; \
     fi; \
     LOGIN_ARGS="+login ${STEAM_LOGIN}"; \
     if [ "${STEAM_LOGIN}" != "anonymous" ]; then \
@@ -40,16 +36,21 @@ RUN set -eux; \
       fi; \
     fi; \
     GUARD_ARGS=""; \
-    if [ -n "${STEAM_GUARD_CODE}" ]; then \
+    if [ -n "${STEAM_GUARD_CODE}" ] && [ "${STEAM_LOGIN}" = "anonymous" ]; then \
       GUARD_ARGS="+set_steam_guard_code ${STEAM_GUARD_CODE}"; \
     fi; \
-    ${STEAMCMD_DIR}/steamcmd.sh \
-      ${GUARD_ARGS} \
-      +@ShutdownOnFailedCommand 1 \
-      +force_install_dir "${INSTALL_DIR}" \
-      ${LOGIN_ARGS} \
-      +app_update "${STATIONEERS_APP_ID}" ${BRANCH_ARGS} validate \
-      +quit
+    for i in 1 2 3; do \
+      ${STEAMCMD_DIR}/steamcmd.sh \
+        ${FORCE_PLATFORM_ARGS} \
+        ${GUARD_ARGS} \
+        +@ShutdownOnFailedCommand 1 \
+        +force_install_dir "${INSTALL_DIR}" \
+        ${LOGIN_ARGS} \
+        +app_update "${STATIONEERS_APP_ID}" ${BRANCH_ARGS} validate \
+        +quit && break; \
+      echo "steamcmd attempt ${i} failed, retrying in 5s..."; \
+      sleep 5; \
+    done
 
 
 FROM ubuntu:24.04 AS runtime

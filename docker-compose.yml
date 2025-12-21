@@ -4,6 +4,7 @@ services:
       context: .
       target: runtime
       args:
+        STEAMCMD_FORCE_PLATFORM: ${STEAMCMD_FORCE_PLATFORM:-}
         STATIONEERS_APP_ID: ${STATIONEERS_APP_ID:-600760}
         STATIONEERS_BRANCH: ${STATIONEERS_BRANCH:-public}
         STATIONEERS_BETAPASS: ${STATIONEERS_BETAPASS:-}
